@@ -154,13 +154,13 @@ export default function SystemDetail() {
 
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
-    for (const file of files) {
+    await Promise.all(files.map(async (file) => {
       const fd = new FormData();
       fd.append('photo', file);
       try {
         await systemsApi.uploadPhoto(id, fd);
       } catch {}
-    }
+    }));
     load();
   };
 
@@ -183,7 +183,7 @@ export default function SystemDetail() {
   };
 
   const markDetailed = async () => {
-    await systemsApi.update(id, { walk_status: 'detailed' });
+    await systemsApi.update(id, { ...system, walk_status: 'detailed' });
     load();
   };
 

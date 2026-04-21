@@ -56,7 +56,15 @@ router.put('/:id', (req, res) => {
   db.prepare(`
     UPDATE clients SET name=?, contact_name=?, contact_email=?, contact_phone=?, address=?, notes=?,
     updated_at=CURRENT_TIMESTAMP WHERE id=?
-  `).run(name || existing.name, contact_name, contact_email, contact_phone, address, notes, req.params.id);
+  `).run(
+    name === undefined ? existing.name : name || existing.name,
+    contact_name === undefined ? existing.contact_name : contact_name,
+    contact_email === undefined ? existing.contact_email : contact_email,
+    contact_phone === undefined ? existing.contact_phone : contact_phone,
+    address === undefined ? existing.address : address,
+    notes === undefined ? existing.notes : notes,
+    req.params.id
+  );
 
   const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(req.params.id);
   res.json(client);

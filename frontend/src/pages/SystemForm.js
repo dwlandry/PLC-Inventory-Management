@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { systemsApi, clientsApi, sitesApi } from '../api';
+import { systemsApi, sitesApi } from '../api';
 import { Loader, X, Plus } from 'lucide-react';
 
 const PROTOCOLS = [
@@ -18,7 +18,6 @@ export default function SystemForm() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [error, setError] = useState('');
-  const [clients, setClients] = useState([]);
   const [sites, setSites] = useState([]);
   const [customProtocol, setCustomProtocol] = useState('');
 
@@ -49,7 +48,6 @@ export default function SystemForm() {
   });
 
   useEffect(() => {
-    clientsApi.getAll().then(setClients);
     if (form.site_id) {
       sitesApi.getAll({ client_id: '' }).then(setSites);
     }
