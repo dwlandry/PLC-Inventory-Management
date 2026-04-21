@@ -6,6 +6,18 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Normalize GPS coordinate: treat undefined/null/empty-string as NULL,
+// but preserve valid values including 0.
+const toCoord = (val) => (val === undefined || val === null || val === '') ? null : val;
+
+const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
+const ALLOWED_PHOTO_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif'];
+
+const ALLOWED_BACKUP_EXTS = [
+  '.acd', '.ap', '.ap15', '.mer', '.rsp', '.rsd', '.gx3', '.gxw', '.zap15',
+  '.zip', '.7z', '.gz', '.tar', '.pdf', '.txt', '.csv', '.bin', '.bak'
+];
+
 const photoStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = path.join(__dirname, '../uploads/photos');
@@ -30,8 +42,30 @@ const backupStorage = multer.diskStorage({
   }
 });
 
-const uploadPhoto = multer({ storage: photoStorage, limits: { fileSize: 20 * 1024 * 1024 } });
-const uploadBackup = multer({ storage: backupStorage, limits: { fileSize: 100 * 1024 * 1024 } });
+const uploadPhoto = multer({
+  storage: photoStorage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_PHOTO_TYPES.includes(file.mimetype) || ALLOWED_PHOTO_EXTS.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed for photos'));
+    }
+  }
+});
+const uploadBackup = multer({
+  storage: backupStorage,
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_BACKUP_EXTS.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not allowed for program backups'));
+    }
+  }
+});
 
 // GET all systems (with optional filters)
 router.get('/', (req, res) => {
@@ -114,7 +148,7 @@ router.post('/', (req, res) => {
   `).run(
     id, site_id, name, manufacturer, model, plc_type, series, firmware_version,
     serial_number, location_description,
-    latitude || null, longitude || null,
+    toCoord(latitude), toCoord(longitude),
     ip_address, subnet_mask, gateway,
     JSON.stringify(communication_protocols || []),
     JSON.stringify(hardware_requirements || {}),
@@ -174,15 +208,24 @@ router.delete('/:id', (req, res) => {
 });
 
 // POST upload photo
-router.post('/:id/photos', uploadPhoto.single('photo'), (req, res) => {
+router.post('/:id/photos', (req, res, next) => {
+  const system = db.prepare('SELECT id FROM plc_systems WHERE id = ?').get(req.params.id);
+  if (!system) return res.status(404).json({ error: 'System not found' });
+  next();
+}, uploadPhoto.single('photo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const { caption, latitude, longitude, taken_at } = req.body;
   const photoId = uuidv4();
-  db.prepare(`
-    INSERT INTO photos (id, plc_system_id, filename, original_name, caption, latitude, longitude, taken_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(photoId, req.params.id, req.file.filename, req.file.originalname, caption,
-    latitude || null, longitude || null, taken_at || null);
+  try {
+    db.prepare(`
+      INSERT INTO photos (id, plc_system_id, filename, original_name, caption, latitude, longitude, taken_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(photoId, req.params.id, req.file.filename, req.file.originalname, caption,
+      toCoord(latitude), toCoord(longitude), taken_at || null);
+  } catch (err) {
+    console.error('Failed to save photo record:', err);
+    return res.status(500).json({ error: 'Failed to save photo record to database' });
+  }
   res.status(201).json(db.prepare('SELECT * FROM photos WHERE id = ?').get(photoId));
 });
 
@@ -198,14 +241,23 @@ router.delete('/:id/photos/:photoId', (req, res) => {
 });
 
 // POST upload program backup
-router.post('/:id/backups', uploadBackup.single('backup'), (req, res) => {
+router.post('/:id/backups', (req, res, next) => {
+  const system = db.prepare('SELECT id FROM plc_systems WHERE id = ?').get(req.params.id);
+  if (!system) return res.status(404).json({ error: 'System not found' });
+  next();
+}, uploadBackup.single('backup'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const { version, backup_date, software_used, notes } = req.body;
   const backupId = uuidv4();
-  db.prepare(`
-    INSERT INTO program_backups (id, plc_system_id, filename, original_name, version, backup_date, software_used, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(backupId, req.params.id, req.file.filename, req.file.originalname, version, backup_date, software_used, notes);
+  try {
+    db.prepare(`
+      INSERT INTO program_backups (id, plc_system_id, filename, original_name, version, backup_date, software_used, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(backupId, req.params.id, req.file.filename, req.file.originalname, version, backup_date, software_used, notes);
+  } catch (err) {
+    console.error('Failed to save backup record:', err);
+    return res.status(500).json({ error: 'Failed to save backup record to database' });
+  }
   res.status(201).json(db.prepare('SELECT * FROM program_backups WHERE id = ?').get(backupId));
 });
 
@@ -232,6 +284,9 @@ router.delete('/:id/backups/:backupId', (req, res) => {
 
 // POST add HMI to system
 router.post('/:id/hmis', (req, res) => {
+  const system = db.prepare('SELECT id FROM plc_systems WHERE id = ?').get(req.params.id);
+  if (!system) return res.status(404).json({ error: 'System not found' });
+
   const { manufacturer, model, software, ip_address, connection_method, notes } = req.body;
   const hmiId = uuidv4();
   db.prepare(`

@@ -147,7 +147,11 @@ export default function InitialWalk() {
   };
 
   const removePhoto = (id) => {
-    setPhotos(prev => prev.filter(p => p.id !== id));
+    setPhotos(prev => {
+      const photo = prev.find(p => p.id === id);
+      if (photo) URL.revokeObjectURL(photo.preview);
+      return prev.filter(p => p.id !== id);
+    });
   };
 
   const validateAndNext = async () => {
@@ -171,11 +175,11 @@ export default function InitialWalk() {
       setStep('plc');
     } else if (step === 'plc') {
       if (!plcName.trim()) { setError('System name is required'); return; }
-      await saveSytem();
+      await saveSystem();
     }
   };
 
-  const saveSytem = async () => {
+  const saveSystem = async () => {
     setSaving(true);
     setError('');
     try {
@@ -222,6 +226,7 @@ export default function InitialWalk() {
         try {
           await systemsApi.uploadPhoto(system.id, fd);
         } catch {}
+        URL.revokeObjectURL(photo.preview);
       }
 
       setSavedSystemId(system.id);
@@ -235,13 +240,16 @@ export default function InitialWalk() {
 
   const resetForm = () => {
     // Keep client/site, reset PLC fields for next system
+    setPhotos(prev => {
+      prev.forEach(p => URL.revokeObjectURL(p.preview));
+      return [];
+    });
     setPlcName('');
     setManufacturer('');
     setModel('');
     setPlcType('');
     setLocationDescription('');
     setNotes('');
-    setPhotos([]);
     setLatitude('');
     setLongitude('');
     setSavedSystemId(null);

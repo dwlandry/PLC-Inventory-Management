@@ -3,6 +3,10 @@ const router = express.Router();
 const db = require('../database');
 const { v4: uuidv4 } = require('uuid');
 
+// Normalize GPS coordinate: treat undefined/null/empty-string as NULL,
+// but preserve valid values including 0.
+const toCoord = (val) => (val === undefined || val === null || val === '') ? null : val;
+
 // GET all sites (optionally filter by client)
 router.get('/', (req, res) => {
   const { client_id } = req.query;
@@ -55,7 +59,7 @@ router.post('/', (req, res) => {
   db.prepare(`
     INSERT INTO sites (id, client_id, name, address, latitude, longitude, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, client_id, name, address, latitude || null, longitude || null, notes);
+  `).run(id, client_id, name, address, toCoord(latitude), toCoord(longitude), notes);
 
   const site = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
   res.status(201).json(site);
@@ -70,7 +74,14 @@ router.put('/:id', (req, res) => {
   db.prepare(`
     UPDATE sites SET name=?, address=?, latitude=?, longitude=?, notes=?,
     updated_at=CURRENT_TIMESTAMP WHERE id=?
-  `).run(name || existing.name, address, latitude || null, longitude || null, notes, req.params.id);
+  `).run(
+    name === undefined ? existing.name : name || existing.name,
+    address === undefined ? existing.address : address,
+    latitude === undefined ? existing.latitude : toCoord(latitude),
+    longitude === undefined ? existing.longitude : toCoord(longitude),
+    notes === undefined ? existing.notes : notes,
+    req.params.id
+  );
 
   res.json(db.prepare('SELECT * FROM sites WHERE id = ?').get(req.params.id));
 });

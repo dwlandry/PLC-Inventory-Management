@@ -2,6 +2,11 @@ import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
+// Derive the backend origin for static asset URLs (photos, etc.)
+// If REACT_APP_API_URL is set to e.g. "https://host/api", we strip the /api suffix
+// so that uploads are served from "https://host/uploads/..." correctly.
+const BACKEND_ORIGIN = API_BASE.replace(/\/api\/?$/, '');
+
 const api = axios.create({ baseURL: API_BASE });
 
 export const clientsApi = {
@@ -48,6 +53,6 @@ export const statsApi = {
 };
 
 export const getPhotoUrl = (filename) =>
-  `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/uploads/photos/${filename}`;
+  `${BACKEND_ORIGIN}/uploads/photos/${filename}`;
 
 export default api;
