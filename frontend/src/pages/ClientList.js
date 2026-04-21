@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { clientsApi, sitesApi } from '../api';
-import { Building2, Plus, ChevronRight, MapPin, Loader, X, Check } from 'lucide-react';
+import { clientsApi } from '../api';
+import { Building2, Plus, ChevronRight, MapPin, Loader, X } from 'lucide-react';
 
 function ClientModal({ onSave, onClose }) {
   const [name, setName] = useState('');
