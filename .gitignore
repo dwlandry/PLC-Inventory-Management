@@ -1,0 +1,8 @@
+node_modules/
+backend/data/
+backend/uploads/
+frontend/build/
+.env
+.env.local
+*.log
+npm-debug.log*
